@@ -17,7 +17,7 @@ module Mccloud
       attr_reader   :env
 
       attr_accessor :cookbooks_path
-      attr_accessor :role_path
+      attr_accessor :roles_path
       attr_accessor :provisioning_path
       attr_accessor :json
       attr_accessor :json_erb
@@ -32,6 +32,25 @@ module Mccloud
       attr_accessor :https_proxy_user
       attr_accessor :https_proxy_pass
       attr_accessor :no_proxy
+
+      attr_accessor :data_bags_path
+
+      attr_accessor :encrypted_data_bag_secret_key_path
+      attr_accessor :encrypted_data_bag_secret
+
+      def roles_path
+	File.expand_path(@roles_path, env.cwd)
+      end
+
+      def data_bags_path
+	File.expand_path(@data_bags_path, env.cwd)
+      end
+
+      def encrypted_data_bag_secret; @encrypted_data_bag_secret || "/tmp/encrypted_data_bag_secret"; end
+
+      def encrypted_data_bag_secret_key_path
+        File.expand_path(@encrypted_data_bag_secret_key_path, env.cwd)
+      end
 
       def initialize(env)
         @env=env
@@ -81,13 +100,27 @@ module Mccloud
           json=@json.to_json
         end
 
+	loglevel="loglevel :debug"
+	configfile=['file_cache_path "/var/chef-solo"',loglevel]
+
+        if @encrypted_data_bag_secret_key_path
+          server.scp(encrypted_data_bag_secret_key_path, encrypted_data_bag_secret)
+        end
+
+	configfile << "role_path \""+File.join("/tmp/"+File.basename(roles_path))+"\""
+        configfile << "data_bag_path \""+File.join("/tmp/"+File.basename(@data_bags_path))+"\""
+
         cooks=Array.new
         @cookbooks_path.each do |cook|
           cooks << File.join("/tmp/"+File.basename(cook))
         end
-        cookpath="cookbook_path [\""+cooks.join("\",\"")+"\"]"
-        loglevel="loglevel :debug"
-        configfile=['file_cache_path "/var/chef-solo"',cookpath,loglevel]
+	configfile << "cookbook_path [\""+cooks.join("\",\"")+"\"]"
+
+	if @encrypted_data_bag_secret_key_path
+          server.scp(encrypted_data_bag_secret_key_path, encrypted_data_bag_secret)
+	  configfile << "encrypted_data_bag_secret \""+encrypted_data_bag_secret+"\""
+        end
+
         #convert string to Tempfile (instead of StringIO), as server.transfer expects a file with a filename
         temp_file_json = Tempfile.new("dna_json")
         File.open(temp_file_json,'w') { |f| f.write(json)}
@@ -103,8 +136,11 @@ module Mccloud
           server.share_folder("cookbook-path-#{i}","/tmp/" + File.basename(path),path,{:mute => true})
           i=i+1
         end
-		server.share
-		
+
+        server.share_folder("role-path","/tmp/" + File.basename(roles_path),roles_path,{:mute => true})
+        server.share_folder("data_bag-path","/tmp/" + File.basename(data_bags_path),data_bags_path,{:mute => true})
+	server.share
+
         env.ui.info "[#{server.name}] - [#{@name}] - running chef-solo"
         env.ui.info "[#{server.name}] - [#{@name}] - login as #{server.user}"
         begin
@@ -125,24 +161,32 @@ module Mccloud
             env.ui.info "[#{server.name}] - [#{@name}] - Cleaning cookbook_path #{path}"
             server.execute("rm -rf /tmp/#{File.basename(path)}",{:mute => true})
           end
+          env.ui.info "[#{server.name}] - [#{@name}] - Cleaning data_bag_path"
+          server.execute("rm -rf /tmp/#{File.basename(data_bags_path)}",{:mute => true})
+          env.ui.info "[#{server.name}] - [#{@name}] - Cleaning roles_path"
+          server.execute("rm -rf /tmp/#{File.basename(roles_path)}",{:mute => true})
 
         end
 
         #Cleaning up
 
       end
+
       # Returns the run list for the provisioning
       def run_list
         json[:run_list] ||= []
       end
+
       # Sets the run list to the specified value
       def run_list=(value)
         json[:run_list] = value
       end
+      
       def add_role(name)
         name = "role[#{name}]" unless name =~ /^role\[(.+?)\]$/
           run_list << name
       end
+      
       def add_recipe(name)
         name = "recipe[#{name}]" unless name =~ /^recipe\[(.+?)\]$/
           run_list << name
@@ -173,11 +217,6 @@ module Mccloud
         return json
       end
 
-      def prepare
-        share_cookbook_folders
-        share_role_folders
-      end
-
       def provision!
         verify_binary("chef-solo")
         chown_provisioning_folder
@@ -186,24 +225,12 @@ module Mccloud
         run_chef_solo
       end
 
-      def share_cookbook_folders
-        host_cookbook_paths.each_with_index do |cookbook, i|
-          env.config.vm.share_folder("v-csc-#{i}", cookbook_path(i), cookbook)
-        end
-      end
-
-      def share_role_folders
-        host_role_paths.each_with_index do |role, i|
-          env.config.vm.share_folder("v-csr-#{i}", role_path(i), role)
-        end
-      end
-
       def setup_solo_config
         setup_config("chef_solo_solo", "solo.rb", {
           :node_name => config.node_name,
           :provisioning_path => config.provisioning_path,
           :cookbooks_path => cookbooks_path,
-          :log_level        => :debug,
+          :log_level  => :debug,
           :recipe_url => config.recipe_url,
           :roles_path => roles_path,
         })
@@ -228,6 +255,6 @@ end #Module Mccloud
 
 
 #cookbook_path     "/etc/chef/recipes/cookbooks"
-#log_level         :info
+#log_level   :info
 #file_store_path  "/etc/chef/recipes/"
 #file_cache_path  "/etc/chef/recipes/"

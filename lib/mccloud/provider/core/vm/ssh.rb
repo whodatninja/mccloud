@@ -89,6 +89,8 @@ module Mccloud
               env.ui.info "[#{@name}] - ssh -p #{@port} #{@user}@#{host_ip} \"#{command}\""
             end
 
+	    print "SSH Command #{ssh_command}"
+
             if command.nil? || command==""
               fg_exec(ssh_command,options)
             else

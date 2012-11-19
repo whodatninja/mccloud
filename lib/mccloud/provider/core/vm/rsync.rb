@@ -9,6 +9,7 @@ module Mccloud::Provider
 
       def share
         @shared_folders.each do |folder|
+	  print "Folder [#{folder}]\n"
           self.execute("test -d '#{folder[:dest]}' || mkdir -p '#{folder[:dest]}' ")
           clean_src_path=File.join(Pathname.new(folder[:src]).expand_path.cleanpath.to_s,'/')
           rsync(clean_src_path,folder[:dest],folder[:options])

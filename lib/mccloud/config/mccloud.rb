@@ -26,7 +26,7 @@ module Mccloud
         @loglevel=:info
 
         @template_path=File.expand_path(File.join(File.dirname(__FILE__),'..','..','..','templates'))
-        @definition_path=File.join(@env.root_path,"definitions")
+        @definition_path=File.join(@env.root_path,"mccloud_defs")
         @vm_path=File.join(@env.root_path,"vms")
 
         env.logger.debug("done loading the mccloud setting")
