@@ -100,8 +100,7 @@ module Mccloud
           json=@json.to_json
         end
 
-	loglevel="loglevel :debug"
-	configfile=['file_cache_path "/var/chef-solo"',loglevel]
+	configfile=['file_cache_path "'+@provisioning_path+'"',"loglevel :"+@log_level]
 
         if @encrypted_data_bag_secret_key_path
           server.scp(encrypted_data_bag_secret_key_path, encrypted_data_bag_secret)
@@ -140,6 +139,7 @@ module Mccloud
         server.share_folder("role-path","/tmp/" + File.basename(roles_path),roles_path,{:mute => true})
         server.share_folder("data_bag-path","/tmp/" + File.basename(data_bags_path),data_bags_path,{:mute => true})
 	server.share
+	server.execute("sudo mkdir  #{@provisioning_path}")
 
         env.ui.info "[#{server.name}] - [#{@name}] - running chef-solo"
         env.ui.info "[#{server.name}] - [#{@name}] - login as #{server.user}"
@@ -154,17 +154,17 @@ module Mccloud
         rescue Exception
         ensure
           env.ui.info "[#{server.name}] - [#{@name}] - Cleaning up dna.json"
-          server.execute("rm /tmp/dna.json",{:mute => true})
+          # server.execute("rm /tmp/dna.json",{:mute => true})
           env.ui.info "[#{server.name}] - [#{@name}] - Cleaning up solo.json"
-          server.execute("rm /tmp/solo.rb", {:mute => true})
+          # server.execute("rm /tmp/solo.rb", {:mute => true})
           cookbooks_path.each do |path|
             env.ui.info "[#{server.name}] - [#{@name}] - Cleaning cookbook_path #{path}"
-            server.execute("rm -rf /tmp/#{File.basename(path)}",{:mute => true})
+            # server.execute("rm -rf /tmp/#{File.basename(path)}",{:mute => true})
           end
           env.ui.info "[#{server.name}] - [#{@name}] - Cleaning data_bag_path"
-          server.execute("rm -rf /tmp/#{File.basename(data_bags_path)}",{:mute => true})
+          # server.execute("rm -rf /tmp/#{File.basename(data_bags_path)}",{:mute => true})
           env.ui.info "[#{server.name}] - [#{@name}] - Cleaning roles_path"
-          server.execute("rm -rf /tmp/#{File.basename(roles_path)}",{:mute => true})
+          # server.execute("rm -rf /tmp/#{File.basename(roles_path)}",{:mute => true})
 
         end
 
